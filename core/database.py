@@ -190,26 +190,13 @@ def get_shows_by_theatre(theatre_id: int, active_only: bool = True, db_uri: str 
         return [dict(row) for row in cur.fetchall()]
 
 
-def get_latest_snapshot(theatre_id: int, db_uri: str = DB_URI) -> Dict:
-    """Get latest snapshot of shows for a theatre
-
-    Args:
-        theatre_id: ID of the theatre
-        db_uri: Database URI
-
-    Returns:
-        Dictionary of the most recent show, or None if no shows exist
-    """
+def get_last_scraped_at(theatre_id: int, db_uri: str = DB_URI) -> str:
+    """Return timestamp of most recent scrape for a theatre"""
     with _open(db_uri) as con:
-        con.row_factory = sqlite3.Row
         cur = con.cursor()
-
         cur.execute("""
-            SELECT * FROM shows
+            SELECT MAX(scraped_at) FROM shows
             WHERE theatre_id = ?
-            ORDER BY scraped_at DESC
-            LIMIT 1;
         """, (theatre_id,))
-
         row = cur.fetchone()
-        return dict(row) if row else None
+        return row[0] if row else None
