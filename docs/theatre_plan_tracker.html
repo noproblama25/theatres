@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theatre Agenda Implementation Tracker</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const Check = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        );
+        const Circle = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+        );
+        const ChevronDown = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        );
+        const ChevronRight = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        );
+
+        // Simple localStorage wrapper to mimic window.storage API
+        const storage = {
+            async get(key) {
+                try {
+                    const value = localStorage.getItem(key);
+                    return value ? { key, value, shared: false } : null;
+                } catch (error) {
+                    throw error;
+                }
+            },
+            async set(key, value) {
+                try {
+                    localStorage.setItem(key, value);
+                    return { key, value, shared: false };
+                } catch (error) {
+                    console.error('Storage error:', error);
+                    return null;
+                }
+            },
+            async delete(key) {
+                try {
+                    localStorage.removeItem(key);
+                    return { key, deleted: true, shared: false };
+                } catch (error) {
+                    console.error('Storage error:', error);
+                    return null;
+                }
+            }
+        };
+
+        function TheatrePlanTracker() {
+            const [completedTasks, setCompletedTasks] = useState(new Set());
+            const [expandedPhases, setExpandedPhases] = useState(new Set([0]));
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                async function loadProgress() {
+                    try {
+                        const result = await storage.get('theatre-plan-progress');
+                        if (result?.value) {
+                            const data = JSON.parse(result.value);
+                            setCompletedTasks(new Set(data.completed || []));
+                            setExpandedPhases(new Set(data.expanded || [0]));
+                        }
+                    } catch (error) {
+                        console.log('Starting fresh - no previous progress found');
+                    } finally {
+                        setLoading(false);
+                    }
+                }
+                loadProgress();
+            }, []);
+
+            useEffect(() => {
+                if (!loading) {
+                    const saveProgress = async () => {
+                        try {
+                            const progressData = {
+                                completed: Array.from(completedTasks),
+                                expanded: Array.from(expandedPhases),
+                                lastSaved: new Date().toISOString()
+                            };
+                            await storage.set('theatre-plan-progress', JSON.stringify(progressData));
+                        } catch (error) {
+                            console.error('Failed to save progress:', error);
+                        }
+                    };
+                    saveProgress();
+                }
+            }, [completedTasks, expandedPhases, loading]);
+
+            const toggleTask = (taskId) => {
+                const newCompleted = new Set(completedTasks);
+                if (newCompleted.has(taskId)) {
+                    newCompleted.delete(taskId);
+                } else {
+                    newCompleted.add(taskId);
+                }
+                setCompletedTasks(newCompleted);
+            };
+
+            const togglePhase = (phaseIndex) => {
+                const newExpanded = new Set(expandedPhases);
+                if (newExpanded.has(phaseIndex)) {
+                    newExpanded.delete(phaseIndex);
+                } else {
+                    newExpanded.add(phaseIndex);
+                }
+                setExpandedPhases(newExpanded);
+            };
+
+            const getPhaseCompletion = (phase) => {
+                const phaseTasks = phase.steps.flatMap(step => 
+                    step.tasks.map(task => `${phase.id}-${step.id}-${task.id}`)
+                );
+                const completed = phaseTasks.filter(taskId => completedTasks.has(taskId)).length;
+                return { completed, total: phaseTasks.length };
+            };
+
+            const getTotalCompletion = () => {
+                const allTaskIds = phases.flatMap(phase => 
+                    phase.steps.flatMap(step => 
+                        step.tasks.map(task => `${phase.id}-${step.id}-${task.id}`)
+                    )
+                );
+                return {
+                    completed: allTaskIds.filter(id => completedTasks.has(id)).length,
+                    total: allTaskIds.length
+                };
+            };
+
+            const phases = [
+                {
+                    id: 1,
+                    title: "Phase 1 — Project Scaffolding",
+                    description: "Create the folder structure and set up your development environment with all the reusable components from your previous project.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Create folder structure and copy reusable files",
+                            tasks: [
+                                { id: 1, text: "Create main project folder: cd ~/projects && mkdir theatre_agenda && cd theatre_agenda" },
+                                { id: 2, text: "Create subfolders: mkdir .streamlit core scraper data pages" },
+                                { id: 3, text: "Copy config.toml: cp ~/projects/what-is-left-finalproject/.streamlit/config.toml .streamlit/" },
+                                { id: 4, text: "Copy styling.py: cp ~/projects/what-is-left-finalproject/core/styling.py core/" },
+                                { id: 5, text: "Copy .gitignore: cp ~/projects/what-is-left-finalproject/.gitignore ." },
+                                { id: 6, text: "Edit .gitignore: nano .gitignore → add 'data/*.db' and '.env' on new lines → save (Ctrl+X, Y, Enter)" },
+                                { id: 7, text: "Create __init__.py: touch scraper/__init__.py" },
+                                { id: 8, text: "Create .env: nano .env → add 'ANTHROPIC_API_KEY=your_key_here' → save" },
+                            ],
+                            note: "Test: Run 'ls -la' to verify all folders exist, then 'ls .streamlit/', 'ls core/', 'ls scraper/' to confirm files are in place."
+                        },
+                        {
+                            id: 2,
+                            title: "Set up requirements.txt",
+                            tasks: [
+                                { id: 1, text: "Remove: langchain, langchain-*, langchain-google-genai, google-generativeai, langgraph" },
+                                { id: 2, text: "Add: anthropic, requests, beautifulsoup4, playwright" },
+                                { id: 3, text: "Keep: streamlit, pandas, python-dotenv, typing-extensions" },
+                                { id: 4, text: "Run: pip install -r requirements.txt" },
+                                { id: 5, text: "Run: playwright install chromium" },
+                            ],
+                            note: "Test by running 'pip list' and verifying all new packages are installed."
+                        }
+                    ]
+                },
+                {
+                    id: 2,
+                    title: "Phase 2 — Data Layer",
+                    description: "Build your SQLite database schema and CRUD operations. This is the foundation everything else depends on, so get it right before proceeding.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Build core/database.py",
+                            tasks: [
+                                { id: 1, text: "Copy _open() and _sqlite_path() helper functions from previous project" },
+                                { id: 2, text: "Write init_db() — creates theatres and shows tables if they don't exist" },
+                                { id: 3, text: "Write add_theatre(name, url, pagination_type)" },
+                                { id: 4, text: "Write get_theatres(active_only=True)" },
+                                { id: 5, text: "Write update_theatre(id, **fields)" },
+                                { id: 6, text: "Write deactivate_theatre(id)" },
+                                { id: 7, text: "Write save_shows(theatre_id, shows_list)" },
+                                { id: 8, text: "Write get_shows_by_theatre(theatre_id, active_only=True)" },
+                                { id: 9, text: "Write get_latest_snapshot(theatre_id)" },
+                            ],
+                            note: "Test init_db() in isolation — call it from Python, verify theatre_agenda.db is created with correct schema using DB Browser for SQLite."
+                        },
+                        {
+                            id: 2,
+                            title: "Test data layer with mock data",
+                            tasks: [
+                                { id: 1, text: "Insert 2-3 fake theatres via add_theatre()" },
+                                { id: 2, text: "Insert 5-6 fake shows via save_shows()" },
+                                { id: 3, text: "Retrieve theatres with get_theatres() and verify output" },
+                                { id: 4, text: "Retrieve shows with get_shows_by_theatre() and verify output" },
+                                { id: 5, text: "Update a theatre record and verify change persisted" },
+                            ],
+                            note: "Do NOT move to Phase 3 until round-trip data insertion and retrieval works perfectly."
+                        }
+                    ]
+                },
+                {
+                    id: 3,
+                    title: "Phase 3 — Scraper Engine",
+                    description: "Build the HTML fetching logic that retrieves raw content from theatre websites. Start simple, add complexity only when needed.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Build fetcher.py (simple case first)",
+                            tasks: [
+                                { id: 1, text: "Create scraper/fetcher.py file" },
+                                { id: 2, text: "Write fetch_page(url) → returns raw HTML string" },
+                                { id: 3, text: "Add headers: User-Agent, Accept-Language" },
+                                { id: 4, text: "Add error handling: raise exception on non-200 response" },
+                                { id: 5, text: "Test against a real theatre URL — print first 500 chars of HTML" },
+                            ],
+                            note: "Test with one simple theatre website before adding pagination. Verify you get clean HTML back."
+                        },
+                        {
+                            id: 2,
+                            title: "Add pagination support",
+                            tasks: [
+                                { id: 1, text: "Write fetch_all_pages(url, pagination_type) → returns list[str]" },
+                                { id: 2, text: "Implement 'single_page' type — wraps fetch_page() in a list" },
+                                { id: 3, text: "Implement 'paginated' type — detects next-page link, loops until none" },
+                                { id: 4, text: "Implement 'infinite_scroll' type — uses playwright to scroll and capture DOM" },
+                                { id: 5, text: "Test each pagination type against real theatre sites" },
+                            ],
+                            note: "Only implement pagination after single-page works. Do not build all three types simultaneously."
+                        }
+                    ]
+                },
+                {
+                    id: 4,
+                    title: "Phase 4 — AI Extractor",
+                    description: "Integrate Claude API to extract structured show data from messy HTML. This is the AI showcase piece of your portfolio.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Build extractor.py",
+                            tasks: [
+                                { id: 1, text: "Create scraper/extractor.py file" },
+                                { id: 2, text: "Define SYSTEM_PROMPT constant with extraction instructions" },
+                                { id: 3, text: "Write extract_shows(raw_html) → returns list[dict]" },
+                                { id: 4, text: "Truncate HTML to 8000 chars before sending to API" },
+                                { id: 5, text: "Add try/except for API calls with clear error messages" },
+                                { id: 6, text: "Parse response with json.loads() — fail loudly on parse errors" },
+                                { id: 7, text: "Compute MD5 hash for each show: hashlib.md5((title+date+time+price).encode()).hexdigest()" },
+                                { id: 8, text: "Add 'hash' field to each show dict before returning" },
+                            ],
+                            note: "The hash is critical for the diff engine. Hash formula: title + date + time + price_range concatenated."
+                        },
+                        {
+                            id: 2,
+                            title: "Test extractor against one real theatre",
+                            tasks: [
+                                { id: 1, text: "Pick simplest of your 5 theatres (cleanest HTML)" },
+                                { id: 2, text: "Run fetcher.fetch_page() → extractor.extract_shows() in test script" },
+                                { id: 3, text: "Print returned JSON — verify all fields present" },
+                                { id: 4, text: "Verify hashes are computed correctly" },
+                                { id: 5, text: "Test error handling: invalid HTML, malformed response" },
+                            ],
+                            note: "Do NOT move to Phase 5 until extraction works reliably for at least one theatre."
+                        }
+                    ]
+                },
+                {
+                    id: 5,
+                    title: "Phase 5 — Diff Engine",
+                    description: "Build the change detection logic that compares new scrapes against stored history to identify what changed.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Build core/diff_engine.py",
+                            tasks: [
+                                { id: 1, text: "Create core/diff_engine.py file" },
+                                { id: 2, text: "Write compute_diff(new_shows, stored_shows) → dict" },
+                                { id: 3, text: "Return structure: {'new': [...], 'changed': [...], 'removed': [...]}" },
+                                { id: 4, text: "Build dict of stored shows keyed by title+date composite" },
+                                { id: 5, text: "Compare new vs stored: NEW if key not in stored" },
+                                { id: 6, text: "Compare new vs stored: CHANGED if key exists but hash differs" },
+                                { id: 7, text: "Compare stored vs new: REMOVED if key not in new shows" },
+                            ],
+                            note: "Test with pure mock data first — two Python lists — before connecting to pipeline."
+                        },
+                        {
+                            id: 2,
+                            title: "Test diff engine with mock scenarios",
+                            tasks: [
+                                { id: 1, text: "Test case: all new shows (stored is empty)" },
+                                { id: 2, text: "Test case: no changes (new equals stored)" },
+                                { id: 3, text: "Test case: one show changed price (hash differs)" },
+                                { id: 4, text: "Test case: one show removed (in stored, not in new)" },
+                                { id: 5, text: "Test case: mixed NEW, CHANGED, REMOVED in single diff" },
+                            ],
+                            note: "Verify output format matches expected structure before integrating."
+                        }
+                    ]
+                },
+                {
+                    id: 6,
+                    title: "Phase 6 — Streamlit UI",
+                    description: "Wire everything together into a polished user interface. Reuse your styling from the previous project for consistency.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Build app.py (main page)",
+                            tasks: [
+                                { id: 1, text: "Create app.py with st.set_page_config()" },
+                                { id: 2, text: "Import and apply apply_main_page_styling() from core/styling.py" },
+                                { id: 3, text: "Section A: Display table of all theatres" },
+                                { id: 4, text: "Section A: Add form to create new theatre (name, URL, pagination type)" },
+                                { id: 5, text: "Section A: Add deactivate button per theatre" },
+                                { id: 6, text: "Section B: Dropdown to select theatre" },
+                                { id: 7, text: "Section B: 'Refresh' button triggering full pipeline" },
+                                { id: 8, text: "Section B: Display current shows as table" },
+                                { id: 9, text: "Store diff results in st.session_state for changes page" },
+                            ],
+                            note: "Reuse st.container(border=True) and column patterns from calculator.py."
+                        },
+                        {
+                            id: 2,
+                            title: "Build pages/changes.py (change history page)",
+                            tasks: [
+                                { id: 1, text: "Create pages/changes.py file" },
+                                { id: 2, text: "Apply styling from core/styling.py" },
+                                { id: 3, text: "Fetch diff results from st.session_state" },
+                                { id: 4, text: "Display ✅ New Shows section (green)" },
+                                { id: 5, text: "Display ✏️ Changed Shows section (blue)" },
+                                { id: 6, text: "Display ❌ Removed Shows section (red)" },
+                                { id: 7, text: "Handle empty state: 'No changes detected since last scan'" },
+                                { id: 8, text: "Show timestamp of last scrape per theatre" },
+                            ],
+                            note: "Test navigation between main page and changes page works smoothly."
+                        }
+                    ]
+                },
+                {
+                    id: 7,
+                    title: "Phase 7 — Integration and Testing",
+                    description: "End-to-end testing with real theatres and deliberate error scenarios to ensure robustness.",
+                    steps: [
+                        {
+                            id: 1,
+                            title: "Full pipeline test",
+                            tasks: [
+                                { id: 1, text: "Add all 5 target theatres via UI" },
+                                { id: 2, text: "Run refresh on first theatre — verify shows appear" },
+                                { id: 3, text: "Run refresh on remaining 4 theatres" },
+                                { id: 4, text: "Manually verify 2-3 shows per theatre against real websites" },
+                                { id: 5, text: "Trigger second refresh — confirm 'No changes detected'" },
+                            ],
+                            note: "This is your first complete run. Watch for any pipeline breaks."
+                        },
+                        {
+                            id: 2,
+                            title: "Simulate change detection",
+                            tasks: [
+                                { id: 1, text: "Manually edit a show price in SQLite" },
+                                { id: 2, text: "Run refresh — confirm CHANGED appears in changes page" },
+                                { id: 3, text: "Manually delete a show record from SQLite" },
+                                { id: 4, text: "Run refresh — confirm REMOVED appears correctly" },
+                                { id: 5, text: "Verify NEW shows detected when theatre adds content" },
+                            ],
+                            note: "Change detection is your key differentiator. Make sure it works perfectly."
+                        },
+                        {
+                            id: 3,
+                            title: "Error handling verification",
+                            tasks: [
+                                { id: 1, text: "Test bad URL — confirm error message displays and app halts gracefully" },
+                                { id: 2, text: "Test network disconnection — confirm error caught and shown" },
+                                { id: 3, text: "Test theatre with no shows — confirm empty state handled" },
+                                { id: 4, text: "Test malformed HTML response — confirm extraction fails safely" },
+                                { id: 5, text: "Test Claude API rate limit — confirm error message clear" },
+                            ],
+                            note: "App should never crash silently. All errors must surface to the user."
+                        }
+                    ]
+                }
+            ];
+
+            const totalStats = getTotalCompletion();
+            const progressPercentage = Math.round((totalStats.completed / totalStats.total) * 100);
+
+            const resetProgress = async () => {
+                if (window.confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
+                    setCompletedTasks(new Set());
+                    setExpandedPhases(new Set([0]));
+                    try {
+                        await storage.delete('theatre-plan-progress');
+                    } catch (error) {
+                        console.error('Failed to delete progress:', error);
+                    }
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6 flex items-center justify-center">
+                        <div className="text-xl">Loading your progress...</div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-900 text-white p-6">
+                    <div className="max-w-5xl mx-auto">
+                        <div className="mb-8">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h1 className="text-4xl font-bold mb-2">🎭 Theatre Agenda Implementation Plan</h1>
+                                    <p className="text-blue-200 text-lg">Portfolio Project — Data & AI</p>
+                                </div>
+                                <button
+                                    onClick={resetProgress}
+                                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-400/30 rounded-lg text-sm transition-colors"
+                                >
+                                    Reset Progress
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-6 border border-white/20">
+                            <h2 className="text-xl font-semibold mb-3">Overall Progress</h2>
+                            <div className="mb-3">
+                                <div className="flex justify-between text-sm mb-1">
+                                    <span>{totalStats.completed} of {totalStats.total} tasks completed</span>
+                                    <span>{progressPercentage}%</span>
+                                </div>
+                                <div className="w-full bg-white/20 rounded-full h-3">
+                                    <div 
+                                        className="bg-green-400 h-3 rounded-full transition-all duration-500"
+                                        style={{ width: `${progressPercentage}%` }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-7 gap-2 mt-4">
+                                {phases.map((phase) => {
+                                    const stats = getPhaseCompletion(phase);
+                                    const phasePercent = Math.round((stats.completed / stats.total) * 100);
+                                    return (
+                                        <div key={phase.id} className="text-center">
+                                            <div className="text-xs mb-1">Phase {phase.id}</div>
+                                            <div className="w-full bg-white/20 rounded-full h-2">
+                                                <div 
+                                                    className="bg-blue-300 h-2 rounded-full transition-all"
+                                                    style={{ width: `${phasePercent}%` }}
+                                                />
+                                            </div>
+                                            <div className="text-xs mt-1">{phasePercent}%</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {phases.map((phase, phaseIndex) => {
+                            const isExpanded = expandedPhases.has(phaseIndex);
+                            const stats = getPhaseCompletion(phase);
+                            const phaseComplete = stats.completed === stats.total;
+
+                            return (
+                                <div 
+                                    key={phase.id} 
+                                    className="bg-white/10 backdrop-blur-lg rounded-lg mb-4 border border-white/20 overflow-hidden"
+                                >
+                                    <button
+                                        onClick={() => togglePhase(phaseIndex)}
+                                        className="w-full p-5 flex items-center justify-between hover:bg-white/5 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            {phaseComplete ? (
+                                                <Check size={24} className="text-green-400" />
+                                            ) : (
+                                                <Circle size={24} className="text-blue-300" />
+                                            )}
+                                            <div className="text-left">
+                                                <h3 className="text-xl font-semibold">{phase.title}</h3>
+                                                <p className="text-sm text-blue-200 mt-1">{phase.description}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-sm text-blue-200">
+                                                {stats.completed}/{stats.total}
+                                            </span>
+                                            {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                                        </div>
+                                    </button>
+
+                                    {isExpanded && (
+                                        <div className="px-5 pb-5">
+                                            {phase.steps.map((step) => (
+                                                <div key={step.id} className="mt-4 bg-white/5 rounded-lg p-4 border border-white/10">
+                                                    <h4 className="font-semibold text-lg mb-3 text-blue-100">
+                                                        Step {phase.id}.{step.id} — {step.title}
+                                                    </h4>
+                                                    
+                                                    <div className="space-y-2">
+                                                        {step.tasks.map((task) => {
+                                                            const taskId = `${phase.id}-${step.id}-${task.id}`;
+                                                            const isCompleted = completedTasks.has(taskId);
+                                                            
+                                                            return (
+                                                                <button
+                                                                    key={task.id}
+                                                                    onClick={() => toggleTask(taskId)}
+                                                                    className={`w-full flex items-start gap-3 p-3 rounded transition-all ${
+                                                                        isCompleted 
+                                                                            ? 'bg-green-500/20 border border-green-400/30' 
+                                                                            : 'bg-white/5 border border-white/10 hover:bg-white/10'
+                                                                    }`}
+                                                                >
+                                                                    <div className={`mt-0.5 flex-shrink-0 ${isCompleted ? 'text-green-400' : 'text-blue-300'}`}>
+                                                                        {isCompleted ? <Check size={20} /> : <Circle size={20} />}
+                                                                    </div>
+                                                                    <span className={`text-left text-sm ${isCompleted ? 'line-through opacity-60' : ''}`}>
+                                                                        {task.text}
+                                                                    </span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {step.note && (
+                                                        <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-400/30 rounded text-sm">
+                                                            <span className="font-semibold text-yellow-300">💡 Note:</span>
+                                                            <span className="text-yellow-100 ml-2">{step.note}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+
+                        <div className="mt-8 text-center text-blue-200 text-sm">
+                            <p className="italic">🎭 Good luck, Alex. Now go build it.</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<TheatrePlanTracker />, document.getElementById('root'));
+    </script>
+</body>
+</html>

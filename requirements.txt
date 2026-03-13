@@ -1,0 +1,16 @@
+# --- Core ---
+streamlit>=1.37.0
+pandas>=2.2.0
+plotly>=5.22.0
+python-dotenv>=1.0.1
+sqlite3-binary ; python_version < "3.12"
+
+# -- added per Claude instructions ---
+anthropic>=0.25.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+playwright>=1.40.0
+
+
+# --- Typing and Utilities ---
+typing-extensions>=4.12.0
